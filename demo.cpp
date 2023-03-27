@@ -109,14 +109,14 @@ public:
           if(sum_head[head_block]-sum_head[m]<=cur)r=m;
           else l=m+1;
         }
-        return arr_head[l][block_size_head-1-(cur-(sum_head[head_block]-sum_head[l]))];
+        return arr_head[l][size_head[l]-1-(cur-(sum_head[head_block]-sum_head[l]))];
       }
       else {
         int tmp=cur-sum_head[head_block];
         int l=0,r=tail_block;
         while(l<r){
           int m=(l+r)>>1;
-          if(sum_tail[m]>=cur)r=m;
+          if(sum_tail[m]>tmp)r=m;
           else l=m+1;
         }
         return arr_tail[l][tmp-(l==0?0:sum_tail[l-1])];
@@ -126,6 +126,7 @@ public:
      * it->field
      */
     T *operator->() const noexcept {
+      return &(operator *());
     }
 
     /**
@@ -156,54 +157,81 @@ public:
 
   class const_iterator {
     public:
-    size_t x,y;
-    size_t size,block_size;
-    size_t tag; T **&arr;
+  /*
+  deque
+  */
+    int size_q,block_size_head,block_size_tail;
+    int head_block,tail_block;
+    size_t tag;
+    T **arr_tail,**arr_head;
+    int *size_tail,*size_head,*sum_head,*sum_tail; 
+  /*
+  deque
+  */   
+    int cur;
     /**
      * it should has similar member method as iterator.
      * you can copy them, but with care!
      * and it should be able to be constructed from an iterator.
      */
     const_iterator(iterator& rhs){
-      x=rhs.x;y=rhs.y;
-      size=rhs.size;block_size=rhs.block_size;
-      tag=rhs.tag;arr=rhs.arr;
+      block_size_head=rhs.block_size_head;
+      block_size_tail=rhs.block_size_tail;
+      size_q=rhs.size_q;
+      head_block=rhs.head_block;
+      tail_block=rhs.tail_block;
+      tag=rhs.tag;  
+      arr_head=rhs.arr_head;
+      arr_tail=rhs.arr_tail;
+      size_head=rhs.size_head;
+      size_tail=rhs.size_tail;
+      sum_tail=rhs.sum_tail;
+      sum_head=rhs.sum_tail;
+      cur=rhs.cur;
     }
     iterator operator+(const int &n) const {
-        if(x*block_size+y+n>size)throw "undefined";
-        iterator tmp(*this);
-        tmp.y=(y+n)%block_size;
-        tmp.x=(x+n/block_size);
-        return tmp;
+      if(cur+n>=size)throw "undefined";
+      iterator tmp(*this);
+      tmp.cur+=n;
+      return tmp;
     }
     iterator operator-(const int &n) const {
-        if(x*block_size+y-n<0)throw "undefined";
-        iterator tmp(*this);
-        if(y<n){
-          tmp.y=(y-n)%block_size+block_size;
-          tmp.x=x-n/block_size-1;
-        }
-        else {
-          tmp.y=y-n;
-          tmp.x=x;
-        }
-        return tmp;
+      if(cur-n<0)throw "undefined";
+      iterator tmp(*this);
+      tmp.cur-=n;
+      return tmp;
     }
     int operator-(const iterator &rhs) const {
       if(tag!=rhs.tag)throw "invaild_iterator";
-      return (x-rhs.x)*block_size+(y-rhs.y);
+      return cur-rhs.cur;
     }
     T &operator*() const {
-      return arr[x][y];
+      if(cur<sum_head[head_block]){
+        int l=0,r=head_block;
+        while(l<r){
+          int m=(l+r)>>1;
+          if(sum_head[head_block]-sum_head[m]<=cur)r=m;
+          else l=m+1;
+        }
+        return arr_head[l][size_head[l]-1-(cur-(sum_head[head_block]-sum_head[l]))];
+      }
+      else {
+        int tmp=cur-sum_head[head_block];
+        int l=0,r=tail_block;
+        while(l<r){
+          int m=(l+r)>>1;
+          if(sum_tail[m]>tmp)r=m;
+          else l=m+1;
+        }
+        return arr_tail[l][tmp-(l==0?0:sum_tail[l-1])];
+      }
     }
     bool operator==(const iterator &rhs) const {
-      if(tag!=rhs.tag)return false;
-      if(x!=rhs.x||y!=rhs.y)return false;
+      if(tag!=rhs.tag||cur==rhs.cur)return false;
       return true;
     }
     bool operator==(const const_iterator &rhs) const {
-      if(tag!=rhs.tag)return false;
-      if(x!=rhs.x||y!=rhs.y)return false;
+      if(tag!=rhs.tag||cur==rhs.cur)return false;
       return true;
     }
     bool operator!=(const iterator &rhs) const {
@@ -213,8 +241,6 @@ public:
       return !((*this)==rhs);
     }
   };
-
-
   /**
    * constructors.
    */
@@ -551,7 +577,110 @@ public:
    * return an iterator pointing to the inserted value.
    * throw if the iterator is invalid or it points to a wrong place.
    */
-  iterator insert(iterator pos, const T &value) {}
+  iterator insert(iterator pos, const T &value) {
+    if(pos.tag!=tag||pos.cur<0||pos.cur>=size_q)throw "invalid";
+    size_q++;pos.size_q++;
+    if(pos.cur<size_head[head_block]){
+      if(head_block==block_size_head-1)
+        db_head();  
+      int l=0,r=head_block;
+      while(l<r){
+        int m=(l+r)>>1;
+        if(sum_head[head_block]-sum_head[m]<=pos.cur)r=m;
+        else l=m+1;
+      }
+      int x=size_head[l]-1-(pos.cur-(sum_head[head_block]-sum_head[l]));
+      if(size_head[l]!=block_size_head){
+        for(int i=size_head[l];i>x+1;i--)
+          arr_head[i]=arr_head[i-1];
+        arr_head[l][x+1]=value;
+        size_head[l]++;
+        for(int i=l;i<=tail_block;i++)
+          sum_tail[i]++;
+      }
+      else if(size_head[l+1]==block_size_head){
+        T *tmp=arr_head[head_block+1];
+        for(int i=head_block+1;i>l+1;i--){
+          arr_head[l][i]=arr_head[l][i-1];
+          size_head[i]=size_head[i-1];
+          sum_head[i]=sum_head[i-1]+1;
+        }
+        arr_head[l+1]=tmp;
+        sum_head[l+1]=sum_head[l]+1;
+        size_head[l+1]=1;
+        arr_head[l+1][0]=arr_head[l][size_head[l]-1];
+        for(int i=size_head[l]-1;i>x+1;i--){
+          arr_head[i]=arr_head[i-1];
+        }
+        arr_head[l][x+1]=value;
+      }
+      else{
+        for(int i=size_head[l+1];i>0;i--){
+          arr_head[l+1][i]=arr_head[l+1][i-1];
+        }
+        arr_head[l+1][0]=arr_head[l][size_head[l]-1];
+        for(int i=size_head[l]-1;i>x+1;i++){
+          arr_head[l][i]=arr_head[l][i-1];
+        }
+        arr_head[l][x+1]=value;
+        size_head[l+1]++;
+        for(int i=l+1;i<=head_block;i++){
+          sum_head[i]++;
+        }
+      }
+    }
+    else{
+      if(tail_block==block_size_tail-1)
+        db_tail();      
+      int tmp=pos.cur-sum_head[head_block];
+      int l=0,r=tail_block;
+      while(l<r){
+        int m=(l+r)>>1;
+        if(sum_tail[m]>tmp)r=m;
+        else l=m+1;
+      }
+      int x=tmp-(l==0?0:sum_tail[l-1]);
+      if(size_tail[l]!=block_size_tail){
+        for(int i=size_tail[l];i>x;i--)
+          arr_tail[l][i]=arr_tail[l][i-1];
+        arr_tail[l][x]=value;
+        size_tail[l]++;
+        for(int i=l;i<=tail_block;i++)
+          sum_tail[i]++;
+      }
+      else if(size_tail[l+1]==block_size_tail){
+        T *tmp=arr_tail[tail_block+1];
+        for(int i=tail_block+1;i>l+1;i--){
+          arr_tail[i]=arr_tail[i-1];
+          size_tail[i]=size_tail[i-1];
+          sum_tail[i]=sum_tail[i-1]+1;
+        }
+        arr_tail[l+1]=tmp;
+        sum_tail[l+1]=sum_tail[l]+1;
+        size_tail[l+1]=1;
+        arr_tail[l+1][0]=arr_tail[l][size_tail[l]-1];
+        for(int i=size_tail[l]-1;i>x;i--){
+          arr_tail[l][i]=arr_tail[l][i-1];
+        }
+        arr_tail[l][x]=value;
+      }
+      else{
+        for(int i=size_tail[l+1];i>0;i--){
+          arr_tail[l+1][i]=arr_tail[l+1][i-1];
+        }
+        arr_tail[l+1][0]=arr_tail[l][size_tail[l]-1];
+        for(int i=size_tail[l]-1;i>x;i--){
+          arr_tail[l][i]=arr_tail[l][i-1];
+        }
+        arr_tail[l][x]=value;
+        size_tail[l+1]++;
+        for(int i=l+1;i<=tail_block;i++){
+          sum_tail[l]++;
+        }
+      }
+    }
+    return pos;
+  }
 
   /**
    * remove the element at pos.
@@ -559,7 +688,74 @@ public:
    * the last element, return end(). throw if the container is empty,
    * the iterator is invalid, or it points to a wrong place.
    */
-  iterator erase(iterator pos) {}
+  iterator erase(iterator pos) {
+    if(pos.tag!=tag||pos.cur<0||pos.cur>=size_q)throw "invalid";
+    size_q--;pos.size_q--;
+    if(size_q==0)throw "container is empty";
+    if(pos.cur<size_head[head_block]){
+      if(head_block==block_size_head-1)
+        db_head();  
+      int l=0,r=head_block;
+      while(l<r){
+        int m=(l+r)>>1;
+        if(sum_head[head_block]-sum_head[m]<=pos.cur)r=m;
+        else l=m+1;
+      }
+      int x=size_head[l]-1-(pos.cur-(sum_head[head_block]-sum_head[l]));
+      if(size_head[l]!=1){
+        for(int i=x;i<size_head[l]-1;i++){
+          arr_head[l][i]=arr_head[l][i+1];
+        }
+        size_head[l]--;
+        for(int i=l;i<=head_block;i++){
+          sum_head[i]--;
+        }
+      }
+      else{
+        T* tmp=arr_head[l];
+        for(int i=l;i<head_block;i++){
+          arr_head[i]=arr_head[i+1];
+          size_head[i]=size_head[i+1];
+          sum_head[i]=sum_head[i+1]-1;
+        }
+        arr_head[head_block]=tmp;
+        head_block--;
+      }
+    }
+    else{
+      if(tail_block==block_size_tail-1)
+        db_tail();      
+      int tmp=pos.cur-sum_head[head_block];
+      int l=0,r=tail_block;
+      while(l<r){
+        int m=(l+r)>>1;
+        if(sum_tail[m]>tmp)r=m;
+        else l=m+1;
+      }
+      int x=tmp-(l==0?0:sum_tail[l-1]);
+      if(size_tail[l]!=1){
+        for(int i=x;i<size_tail[l]-1;i++){
+          arr_tail[l][i]=arr_tail[l][i+1];
+        }
+        size_tail[l]--;
+        for(int i=l;i<tail_block;i++){
+          sum_tail[i]--;
+        }
+      }
+      else {
+        T* tmp=arr_tail[l];
+        for(int i=l;i<tail_block;i++){
+          arr_tail[i]=arr_tail[i+1];
+          size_tail[i]=size_tail[i+1];
+          sum_tail[i]=sum_tail[i+1]-1;
+        }
+        arr_tail[tail_block]=tmp;
+        tail_block--;
+      }
+    }
+    return pos;
+  }
+
 
   /**
    * add an element to the end.
@@ -594,14 +790,6 @@ public:
    * remove the last element.
    * throw when the container is empty.
    */
-  void pop_back() {
-    if(size_q==0)throw "container_is_empty";
-    if(size_tail[tail_block]!=0){
-      size_q--;
-      size_tail[tail_block]--;
-      sum_tail[tail_block]--;
-    }
-  }
 
   /**
    * insert an element to the beginning.
@@ -631,7 +819,55 @@ public:
       }
     }
   }
-
+  void divide(int tp){
+    if(tp==1){ //no tail
+      for(int i=size_head[0]-1;i>0;i--){
+        push_back(arr_head[0][i]);
+      }
+      T *tmp=arr_head[0];
+      int tmpsize=size_head[0];
+      for(int i=0;i<head_block;i++){
+        arr_head[i]=arr_head[i+1];
+        size_head[i]=size_head[i+1];
+        sum_head[i]=sum_head[i+1]-tmpsize;
+      }
+      arr_head[head_block]=tmp;
+      head_block--;
+      size_q-=tmpsize;
+    }
+    else{//no head
+      for(int i=size_tail[0]-1;i>0;i--){
+        push_front(arr_tail[0][i]);
+      }
+      T *tmp=arr_tail[0];
+      int tmpsize=size_tail[0];
+      for(int i=0;i<tail_block;i++){
+        arr_tail[i]=arr_tail[i+1];
+        size_tail[i]=size_tail[i+1];
+        sum_tail[i]=sum_tail[i+1]-tmpsize;
+      }
+      arr_tail[tail_block]=tmp;
+      tail_block--;
+      size_q-=tmpsize;
+    }
+  }
+  void pop_back() {
+    if(size_q==0)throw "container_is_empty";
+    if(size_tail[tail_block]!=0){
+      size_tail[tail_block]--;
+      sum_tail[tail_block]--;
+      size_q--;
+    }
+    else if(tail_block!=0){
+      tail_block--;
+      size_tail[tail_block]--;
+      sum_tail[tail_block]--;  
+      size_q--;    
+    }
+    else {
+      divide(1);
+    }
+  }
   /**
    * remove the first element.
    * throw when the container is empty.
@@ -643,6 +879,15 @@ public:
       sum_head[head_block]--;
       size_q--;
     }
+    else if(head_block!=0){
+      head_block--;
+      size_head[head_block]--;
+      sum_head[head_block]--; 
+      size_q--;
+    }
+    else {
+      divide(-1);
+    }
   }
   void print(){
     std::cout<<"size_q:"<<size_q<<std::endl;
@@ -653,11 +898,11 @@ public:
 
 int main(){
     deque<long long>q,qq;
-    q.push_front(2);
-    q.push_front(3);
-    q.push_front(4);
-    q.push_front(5);
-    q.push_front(4);
-    std::cout<<q[1];
+    q.push_front(1);
+    q.push_back(3);
+    q.push_back(4);
+    q.pop_front();
+    q.pop_front();
+    std::cout<<q[0];
     return 0;
 }
