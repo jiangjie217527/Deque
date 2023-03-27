@@ -6,16 +6,18 @@ public:
   int size_q,block_size;
   size_t tag;
   T **arr;
+  int *type;int size_head,size_tail,tail_block;
   class const_iterator;
   class iterator {
   public:
     int x,y;
     int size,block_size;
+    int *type;int size_head,size_tail;//6+2+1
     size_t tag; T **arr;
   public:
     iterator(){
-      x=y=size=block_size=tag=0;
-      arr=nullptr;
+      x=y=size=block_size=tag=size_head=size_tail=tail_block=0;
+      arr=type=nullptr;
     }
     /**
      * return a new iterator which points to the n-next element.
@@ -23,26 +25,54 @@ public:
      * same for operator-.
      */
     iterator operator+(const int &n) const {
-        if(x*block_size+y+n>size)throw "undefined";
-        size_t t=y;t+=n;
-        iterator tmp(*this);
-        tmp.y=t%block_size;
-        tmp.x=x+t/block_size;
-        return tmp;
+      if(x*block_size+(type[x]==1?y:block_size-1-y)+n>size-1)throw "undefined";
+      iterator tmp(*this);
+      int dis;
+      if(type[x]==1){
+        dis=block_size-1-y;
+      }
+      else{
+        dis=y;
+      }
+      if(n<=dis){
+        y+=(type[x]*n);
+      }
+      else {
+        n-=dis;
+        tmp.x+=(1+n/block_size);
+        if(type[tmp.x]==1){
+          tmp.y=n%block_size;
+        }
+        else{
+          tmp.y=block_size-1-n%block_size;
+        }
+      }
+      return tmp;
     }
     iterator operator-(const int &n) const {
-        if(x*block_size+y-n<0)throw "undefined";
-        int t=y;t-=n;
-        iterator tmp(*this);
-        if(y<n){
-          tmp.y=t%block_size+block_size;
-          tmp.x=x-t/block_size-1;
+      if(x*block_size+(type[x]==1?y:block_size-1-y)-n<0)throw "undefined";
+      iterator tmp(*this);
+      int dis;
+      if(type[x]==-1){
+        dis=block_size-1-y;
+      }
+      else{
+        dis=y;
+      }
+      if(n<=dis){
+        y-=(type[x]*n);
+      }
+      else {
+        n-=dis;
+        tmp.x-=(2+n/block_size);
+        if(type[tmp.x]==-1){
+          tmp.y=n%block_size;
         }
-        else {
-          tmp.y=y-n;
-          tmp.x=x;
-        }
-        return tmp;
+        else{
+          tmp.y=block_size-1-n%block_size;
+        }            
+      }
+      return tmp;
     }
 
     /**
@@ -52,26 +82,27 @@ public:
      */
     int operator-(const iterator &rhs) const {
       if(tag!=rhs.tag)throw "invaild_iterator";
-      return (x-rhs.x)*block_size+(y-rhs.y);
+      if(x==rhs.x){
+        return (y-rhs.y)*type[x];
+      }
+      else if(x>rhs.x){
+        int dis1,dis2;
+        dis1=(type[x]==1?block_size-1-y:y);
+        dis2=(type[rhs.x]==-1?block_size-1-y:y);
+        return dis1+dis2+(x-rhs.x-1)*block_size;
+      }
+      else{
+        return rhs-*this;
+      }
     }
     iterator &operator+=(const int &n) {
-        if(x*block_size+y+n>size)throw "undefined";
-        size_t t=y;t+=n;
-        y=t%block_size;
-        x=x+t/block_size;
+        if(x*block_size+(type[x]==1?y:block_size-1-y)+n>size-1)throw "undefined";
+        *this=*this+n;
         return *this;
     }
     iterator &operator-=(const int &n) {
-        if(x*block_size+y-n<0)throw "undefined";
-        int t=y;t-=n;
-        if(y<n){
-          y=t%block_size+block_size;
-          x=x-t/block_size-1;
-        }
-        else {
-          y=y-n;
-          x=x;
-        }
+        if(x*block_size+(type[x]==1?y:block_size-1-y)-n<0)throw "undefined";
+        *this=*this-n;
         return *this;
     }
 
